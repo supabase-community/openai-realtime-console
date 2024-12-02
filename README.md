@@ -61,6 +61,25 @@ There are two functions enabled;
 
 You can freely interrupt the model at any time in push-to-talk or VAD mode.
 
+## Using Supabase Edge Functions as a relay server
+
+Create a new `.env` file in your `/supabase/functions` directory with the following configuration:
+
+```conf
+OPENAI_API_KEY=YOUR_API_KEY
+```
+
+```shell
+supabase start
+supabase functions serve --no-verify-jwt
+```
+
+**You will need to create a `.env` file** with the following configuration:
+
+```conf
+REACT_APP_LOCAL_RELAY_SERVER_URL=http://127.0.0.1:54321/functions/v1/relay
+```
+
 ## Using a relay server
 
 If you would like to build a more robust implementation and play around with the reference
