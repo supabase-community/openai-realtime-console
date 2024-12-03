@@ -1,68 +1,72 @@
+import { createServer } from "node:http";
+import { WebSocketServer } from "npm:ws";
+import { RealtimeClient } from "https://raw.githubusercontent.com/openai/openai-realtime-api-beta/refs/heads/main/lib/client.js";
+
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-Deno.serve(async (req) => {
-  const upgrade = req.headers.get("upgrade") || "";
+const server = createServer();
+// Since we manually created the HTTP server,
+// turn on the noServer mode.
+const wss = new WebSocketServer({ noServer: true });
 
-  if (upgrade.toLowerCase() != "websocket") {
-    return new Response("request isn't trying to upgrade to websocket.");
+wss.on("connection", async (ws) => {
+  console.log("socket opened");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not set");
   }
+  // Instantiate new client
+  console.log(`Connecting with key "${OPENAI_API_KEY.slice(0, 3)}..."`);
+  const client = new RealtimeClient({ apiKey: OPENAI_API_KEY });
 
-  const { socket, response } = Deno.upgradeWebSocket(req);
+  // Relay: OpenAI Realtime API Event -> Browser Event
+  client.realtime.on("server.*", (event) => {
+    console.log(`Relaying "${event.type}" to Client`);
+    ws.send(JSON.stringify(event));
+  });
+  client.realtime.on("close", () => ws.close());
 
-  socket.onopen = () => {
-    // initiate an outbound WS connection with OpenAI
-    const url =
-      "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01";
-
-    // openai-insecure-api-key isn't a problem since this code runs in an Edge Function (not client browser)
-    const openaiWS = new WebSocket(url, [
-      "realtime",
-      `openai-insecure-api-key.${OPENAI_API_KEY}`,
-      "openai-beta.realtime-v1",
-    ]);
-
-    // Relay: Browser Event -> OpenAI Realtime API Event
-    // We need to queue data waiting for the OpenAI connection
-    const messageQueue: any[] = [];
-    const messageHandler = (data: any) => {
-      try {
-        const event = JSON.parse(data);
-        console.log(`Relaying "${event.type}" to OpenAI`);
-        openaiWS.send(data);
-      } catch (e) {
-        console.error(e.message);
-        console.log(`Error parsing event from client: ${data}`);
-      }
-    };
-
-    socket.onmessage = (e) => {
-      console.log("socket message:", e.data);
-      // only send the message if openAI ws is open
-      if (openaiWS.readyState === 1) {
-        messageHandler(e.data);
-      } else {
-        messageQueue.push(e.data);
-      }
-    };
-
-    openaiWS.onopen = () => {
-      console.log("Connected to OpenAI server.");
-      while (messageQueue.length) {
-        messageHandler(messageQueue.shift());
-      }
-    };
-
-    openaiWS.onmessage = (e) => {
-      console.log(e.data);
-      socket.send(e.data);
-    };
-
-    openaiWS.onerror = (e) => console.log("OpenAI error: ", e.message);
-    openaiWS.onclose = (e) => console.log("OpenAI session closed");
+  // Relay: Browser Event -> OpenAI Realtime API Event
+  // We need to queue data waiting for the OpenAI connection
+  const messageQueue = [];
+  const messageHandler = (data) => {
+    try {
+      const event = JSON.parse(data);
+      console.log(`Relaying "${event.type}" to OpenAI`);
+      client.realtime.send(event.type, event);
+    } catch (e) {
+      console.error(e.message);
+      console.log(`Error parsing event from client: ${data}`);
+    }
   };
 
-  socket.onerror = (e) => console.log("socket errored:", e.message);
-  socket.onclose = () => console.log("socket closed");
+  ws.on("message", (data) => {
+    if (!client.isConnected()) {
+      messageQueue.push(data);
+    } else {
+      messageHandler(data);
+    }
+  });
+  ws.on("close", () => client.disconnect());
 
-  return response; // 101 (Switching Protocols)
+  // Connect to OpenAI Realtime API
+  try {
+    console.log(`Connecting to OpenAI...`);
+    await client.connect();
+  } catch (e) {
+    console.log(`Error connecting to OpenAI: ${e.message}`);
+    ws.close();
+    return;
+  }
+  console.log(`Connected to OpenAI successfully!`);
+  while (messageQueue.length) {
+    messageHandler(messageQueue.shift());
+  }
 });
+
+server.on("upgrade", (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit("connection", ws, req);
+  });
+});
+
+server.listen(8080);
