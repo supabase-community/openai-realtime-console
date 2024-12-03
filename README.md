@@ -69,33 +69,17 @@ Create a new `.env` file in your `/supabase/functions` directory with the follow
 OPENAI_API_KEY=YOUR_API_KEY
 ```
 
+Then in your terminal run the following commands:
+
 ```shell
 supabase start
 supabase functions serve --no-verify-jwt
 ```
 
-**You will need to create a `.env` file** with the following configuration:
+**In the project root directory you will need to create a `.env` file** with the following configuration:
 
 ```conf
 REACT_APP_LOCAL_RELAY_SERVER_URL=http://127.0.0.1:54321/functions/v1/relay
-```
-
-## Using a relay server
-
-If you would like to build a more robust implementation and play around with the reference
-client using your own server, we have included a Node.js [Relay Server](/relay-server/index.js).
-
-```shell
-$ npm run relay
-```
-
-It will start automatically on `localhost:8081`.
-
-**You will need to create a `.env` file** with the following configuration:
-
-```conf
-OPENAI_API_KEY=YOUR_API_KEY
-REACT_APP_LOCAL_RELAY_SERVER_URL=http://localhost:8081
 ```
 
 You will need to restart both your React app and relay server for the `.env.` changes
@@ -103,22 +87,7 @@ to take effect. The local server URL is loaded via [`ConsolePage.tsx`](/src/page
 To stop using the relay server at any time, simply delete the environment
 variable or set it to empty string.
 
-```javascript
-/**
- * Running a local relay server will allow you to hide your API key
- * and run custom logic on the server
- *
- * Set the local relay server address to:
- * REACT_APP_LOCAL_RELAY_SERVER_URL=http://localhost:8081
- *
- * This will also require you to set OPENAI_API_KEY= in a `.env` file
- * You can run it with `npm run relay`, in parallel with `npm start`
- */
-const LOCAL_RELAY_SERVER_URL: string =
-  process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
-```
-
-This server is **only a simple message relay**, but it can be extended to:
+This Supabase Edge Functin is **only a simple message relay**, but it can be extended to:
 
 - Hide API credentials if you would like to ship an app to play with online
 - Handle certain calls you would like to keep secret (e.g. `instructions`) on
@@ -126,6 +95,17 @@ This server is **only a simple message relay**, but it can be extended to:
 - Restrict what types of events the client can receive and send
 
 You will have to implement these features yourself.
+
+### Deploying the relay server
+
+To deploy your relay server to Supabase Edge Functions, you can use the following commands:
+
+```shell
+supabase secrets set --env-file supabase/functions/.env
+supabase functions deploy --no-verify-jwt
+```
+
+Now you can replace the `REACT_APP_LOCAL_RELAY_SERVER_URL` with the URL of your deployed Edge Function.
 
 # Realtime API reference client
 
