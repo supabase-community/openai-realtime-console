@@ -1,5 +1,9 @@
 import { createServer } from "node:http";
 import { WebSocketServer } from "npm:ws";
+import type {
+  RawData,
+  WebSocketServer as _WebSocketServer,
+} from "npm:@types/ws";
 import { RealtimeClient } from "https://raw.githubusercontent.com/openai/openai-realtime-api-beta/refs/heads/main/lib/client.js";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -7,7 +11,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const server = createServer();
 // Since we manually created the HTTP server,
 // turn on the noServer mode.
-const wss = new WebSocketServer({ noServer: true });
+const wss: _WebSocketServer = new WebSocketServer({ noServer: true });
 
 wss.on("connection", async (ws) => {
   console.log("socket opened");
@@ -19,7 +23,7 @@ wss.on("connection", async (ws) => {
   const client = new RealtimeClient({ apiKey: OPENAI_API_KEY });
 
   // Relay: OpenAI Realtime API Event -> Browser Event
-  client.realtime.on("server.*", (event) => {
+  client.realtime.on("server.*", (event: any) => {
     console.log(`Relaying "${event.type}" to Client`);
     ws.send(JSON.stringify(event));
   });
@@ -27,8 +31,8 @@ wss.on("connection", async (ws) => {
 
   // Relay: Browser Event -> OpenAI Realtime API Event
   // We need to queue data waiting for the OpenAI connection
-  const messageQueue = [];
-  const messageHandler = (data) => {
+  const messageQueue: RawData[] = [];
+  const messageHandler = (data: any) => {
     try {
       const event = JSON.parse(data);
       console.log(`Relaying "${event.type}" to OpenAI`);
